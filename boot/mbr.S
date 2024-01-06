@@ -1,6 +1,6 @@
 ; 主引导记录MBR
 ; ---------------------------------------------
-SECTION MBR vstart=0x7c00	; 指定mbr在链接后的重定位地址为0x7c00
+SECTION MBR vstart=0x7c00	; 指定mbr在链接后的重定位地址为0x7c00(只负责为程序编址即当前程序中所有代码的基地址都从0x7c00开始,不负责加载)
 	mov ax,cs
 	mov ds,ax
 	mov es,ax
