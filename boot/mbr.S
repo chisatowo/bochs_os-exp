@@ -1,5 +1,6 @@
 ; 主引导记录MBR
 ;
+%include "boot.inc"
 ;LOADER_BASE_ADDR equ 0xA000
 ;LOADER_START_SECTOR equ 0x2
 ; ---------------------------------------------
@@ -73,8 +74,76 @@ SECTION MBR vstart=0x7c00	; 指定mbr在链接后的重定位地址为0x7c00(只
 	mov byte [gs:si+0x8],'R'
 	mov byte [gs:si+0x9],0x94
 
-;-------------- 打印字符串结束 -------------------
-	jmp $			; 使程序悬停
+;-------------- 准备读取硬盘扇区 ----------------
+ 	mov eax,LOADER_START_SECTOR		; 起始扇区lba地址
+	mov bx,LOADER_BASE_ADDR			; 读入LOADER的地址
+	mov cx,1						; 待读取的扇区数
+	call rd_disk_m_16				; 调用函数读入LOADER
+
+	jmp LOADER_BASE_ADDR			; 读取完成后,跳转到LOADER所在的地址,执行内核加载并初始化
+
+;-------------- 读取硬盘n个扇区 ------------------
+rd_disk_m_16:
+
+; eax=LBA扇区号
+; bx=将要读取LOADER的地址
+; cx=将要读入的扇区数
+	mov esi,eax	;备份eax
+	mov di,cx	;备份cx
+; 读取硬盘:
+; 1. 设置要读取的扇区数:
+	mov dx,0x1f2
+	mov al,cl
+	out dx,al	;读取的扇区数
+	mov eax,esi ;恢复eax的值
+
+; 2. 将LBA地址存入0x1f3~0x1f6
+	; LBA地址7~0位写入端口0x1f3
+	mov dx,0x1f3
+	out dx,al
+
+	; LBA地址15~8位写入端口0x1f4
+	mov cl,8
+	shr eax,cl	; 将eax的值右移8位
+
+	; LBA地址23~16位写入端口0x1f5
+	shr eax,cl
+	mov dx,0x1f5
+	out dx,al
+
+	shr eax,cl
+	and al,0x0f	; 获取LBA第24~27位
+	or al,0xe0	; 将第7~4位设置为1110,表示LBA模式
+	mov dx,0x1f6
+	out dx,al
+
+; 3. 向0x1f7端口写入读命令,0x20
+	mov dx,0x1f7
+	mov al,0x20
+	out dx,al
+
+; 4. 检测硬盘状态
+.not_ready:
+	; 同一端口,out表示写入命令,in表示读入硬盘状态
+	nop
+	in al,dx
+	and al,0x88	; 第3位为1表示硬盘控制器准备就绪,第7位为1表示硬盘忙
+	cmp al,0x08
+	jnz .not_ready	; 第3位不为1说明未准备好,则进入循环
+
+; 5. 从0x1f0端口读取数据
+	mov ax,di	; di为要读取的扇区数,每次读入一个字(即两个字节)共需di*256次
+	mov dx,256
+	mul dx
+	mov cx,ax
+	mov dx,0x1f0
+
+.go_on_read:
+	in ax,dx
+	mov [bx],ax
+	add bx,2
+	loop .go_on_read	; loop循环次数以cx寄存器中的值为准,每次loop时cx的值-1，不为0则跳转
+	ret
 	
 	;message db "1 MBR" ; 在此处内存定义变量,存储待打印字符串
 	times 510-($-$$) db 0	; 填充剩余字节,确保MBR将磁盘第一扇区占满即512字节
