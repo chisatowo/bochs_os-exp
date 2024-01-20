@@ -1,5 +1,4 @@
 ; 主引导记录MBR
-;
 %include "boot.inc"
 ;LOADER_BASE_ADDR equ 0xA000
 ;LOADER_START_SECTOR equ 0x2
@@ -39,7 +38,7 @@ SECTION MBR vstart=0x7c00	; 指定mbr在链接后的重定位地址为0x7c00(只
 					; 输出: (DH,DL)存放的是光标的行和列(即Y坐标与X坐标)
 
 ;;---------------- 打印字符串 ---------------------
-;; INT 0x10 功能号: 0x13 功能描述: 在Teletype模式下显示字符串
+; INT 0x10 功能号: 0x13 功能描述: 在Teletype模式下显示字符串
 	;mov ax, message 
 	;mov bp, ax		; es:bp 为字符串首地址,es此时同cs一致
 					;; 在文件开头已经为sreg初始化
@@ -47,7 +46,11 @@ SECTION MBR vstart=0x7c00	; 指定mbr在链接后的重定位地址为0x7c00(只
 	;mov ax, 0x1301	; 输入: ah放入功能号0x13 al设置写字符方式 al=0x1: 显示字符串,光标跟随移动
 	;mov bx, 0x2		; 输入: bh放入要显示的页号 bl设置字符属性,黑底绿字(bl = 02h)
 	;int 0x10		; 呼叫INT中断
-
+	;mbrmsg db '1 MBR'
+	;mov bx,mbrmsg
+	;mov cx,5
+	;mov dx,0xb0
+	;call Print_Cursor
 ;--------------- 操纵显存打印字符串 -----------
 ; 获取光标所在位置,并将位置转换为字节形式存储到cx寄存器
 	mov bx,dx	; 将前面获取的光标位置取出
@@ -60,24 +63,24 @@ SECTION MBR vstart=0x7c00	; 指定mbr在链接后的重定位地址为0x7c00(只
 	add si,ax	; 累加行字节数
 	
 	mov byte [gs:si],'1'		; 在VGA文本模式中,高字节代表字符本身
-	mov byte [gs:si+0x1],0x94		; 低字节代表字符属性,此处9代表背景蓝色闪烁,4代表前景色为红色
+	mov byte [gs:si+0x1],0xb0		; 低字节代表字符属性,此处9代表背景蓝色闪烁,4代表前景色为红色
 
 	mov byte [gs:si+0x2],' '
-	mov byte [gs:si+0x3],0x94
+	mov byte [gs:si+0x3],0xb0
 
 	mov byte [gs:si+0x4],'M'
-	mov byte [gs:si+0x5],0x94
+	mov byte [gs:si+0x5],0xb0
 
 	mov byte [gs:si+0x6],'B'
-	mov byte [gs:si+0x7],0x94
+	mov byte [gs:si+0x7],0xb0
 
 	mov byte [gs:si+0x8],'R'
-	mov byte [gs:si+0x9],0x94
+	mov byte [gs:si+0x9],0xb0
 
 ;-------------- 准备读取硬盘扇区 ----------------
  	mov eax,LOADER_START_SECTOR		; 起始扇区lba地址
 	mov bx,LOADER_BASE_ADDR			; 读入LOADER的地址
-	mov cx,1						; 待读取的扇区数
+	mov cx,4						; 待读取的扇区数
 	call rd_disk_m_16				; 调用函数读入LOADER
 
 	jmp LOADER_BASE_ADDR			; 读取完成后,跳转到LOADER所在的地址,执行内核加载并初始化
